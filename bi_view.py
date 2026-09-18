@@ -1,3 +1,17 @@
+from __future__ import annotations
+
+from collections import defaultdict
+import html
+
+import altair as alt
+import pandas as pd
+import streamlit as st
+
+# Compatibility palette used by the existing chart helpers.
+INK = "#172033"
+GOLD = "#2563eb"
+TEAL = "#08a66a"
+
 def theme():
     # The global StockDash theme is applied in ui_v2.apply_theme().
     # Keep this function as a compatibility hook for callers that used bi_view.theme().
