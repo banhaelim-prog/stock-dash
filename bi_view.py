@@ -3,25 +3,13 @@ from __future__ import annotations
 from collections import defaultdict
 import html
 
-import altair as alt
 import pandas as pd
 import streamlit as st
-
-# Compatibility palette used by the existing chart helpers.
-INK = "#172033"
-GOLD = "#2563eb"
-TEAL = "#08a66a"
 
 def theme():
     # The global StockDash theme is applied in ui_v2.apply_theme().
     # Keep this function as a compatibility hook for callers that used bi_view.theme().
     return
-
-def draw(chart):
-    st.altair_chart(chart.configure(background='#fffdf9').configure_view(stroke=None)
-                    .configure_axis(labelColor=INK,titleColor=INK,gridColor='#eee8dd',labelFontSize=13,titleFontSize=13)
-                    .configure_legend(labelColor=INK,titleColor=INK,labelFontSize=13), use_container_width=True)
-
 
 def overview(details, snapshot):
     reports = [r for _, r, _, _ in details.values() if r]
@@ -45,9 +33,7 @@ def overview(details, snapshot):
             df=pd.DataFrame([{'종목':p['name'],'평가액':p['value']} for p in positions if p['value']>0])
             if not df.empty:
                 df['비중']=df['평가액']/df['평가액'].sum()
-                draw(alt.Chart(df).mark_arc(innerRadius=65,outerRadius=105).encode(
-                    theta='평가액:Q',color=alt.Color('종목:N',scale=alt.Scale(range=[GOLD,TEAL,'#b96b50','#71809a','#c4ae82']),legend=alt.Legend(orient='bottom')),
-                    tooltip=['종목',alt.Tooltip('평가액:Q',format=',.0f'),alt.Tooltip('비중:Q',format='.1%')]).properties(height=245))
+                st.dataframe(df[['종목','평가액','비중']], hide_index=True, use_container_width=True)
                 st.caption('조회된 국내주식 평가액 기준 · 현금 제외')
         else:
             st.markdown('**계좌를 연결하면 보유 비중을 보여드립니다.**')
@@ -74,9 +60,7 @@ def overview(details, snapshot):
                 else:special.append(r['name']+' · 전년 이익이 0 이하: 상세 실적 확인')
             if bars:
                 df=pd.DataFrame(bars)
-                draw(alt.Chart(df).mark_bar(cornerRadiusEnd=4,color=GOLD).encode(
-                    x=alt.X('증가율:Q',title='누적 영업이익 증가율 (%)'),y=alt.Y('종목:N',sort='-x',title=None),
-                    tooltip=['종목',alt.Tooltip('증가율:Q',format='+.1f')]).properties(height=245))
+                st.bar_chart(df.set_index('종목')[['증가율']], use_container_width=True, height=245)
             st.caption(f'{key[0]} / {key[1]} · {key[2]} · 같은 기간과 회계기준의 기업만 비교')
             for text in special:st.caption(text)
 
@@ -93,9 +77,7 @@ def detail(r):
         f=r.get('financial')
         if f:
             df=pd.DataFrame([{'기간':f['prior_period'],'영업이익':f['prior_operating_profit']},{'기간':f['period'],'영업이익':f['operating_profit']}])
-            draw(alt.Chart(df).mark_bar(size=45,cornerRadiusTopLeft=4,cornerRadiusTopRight=4).encode(
-                x=alt.X('기간:O',title=None,axis=alt.Axis(labelAngle=0)),y=alt.Y('영업이익:Q',title=f['unit']),
-                color=alt.Color('기간:N',scale=alt.Scale(range=['#d8c8a7',GOLD]),legend=None),tooltip=['기간',alt.Tooltip('영업이익:Q',format=',.1f')]).properties(height=210))
+            st.bar_chart(df.set_index('기간')[['영업이익']], use_container_width=True, height=210)
             margin=f['operating_profit']/f['revenue']*100 if f['revenue']>0 else None
             st.caption(f"{f['basis']} · {f['currency']} {f['unit']}"+(f' · 영업이익률 {margin:.1f}%' if margin is not None else ''))
         else:st.info('같은 기간의 전년·당년 실적이 필요합니다.')
@@ -104,7 +86,7 @@ def detail(r):
         v=r.get('valuation')
         if v:
             df=pd.DataFrame([{'구분':label,'가격':v[k]} for k,label in [('low','낮은 참고가'),('base','기본 참고가'),('high','높은 참고가'),('current_price','비교 주가')]])
-            draw(alt.Chart(df).mark_point(filled=True,size=130).encode(x=alt.X('가격:Q',title='원',scale=alt.Scale(zero=False)),y=alt.Y('구분:N',title=None),color=alt.value(TEAL),tooltip=['구분','가격']).properties(height=160))
+            st.dataframe(df, hide_index=True, use_container_width=True)
             st.metric('기본 참고가',f"{v['base']:,.0f}원")
             st.caption(f"가격 기준일 {v['price_date']} · 평가 가정은 상세 탭에서 확인")
         else:
@@ -114,4 +96,4 @@ def detail(r):
 
 def peers_chart(peers):
     df=pd.DataFrame(peers['rows']).rename(columns={'name':'기업','operating_profit':'영업이익'})
-    draw(alt.Chart(df).mark_bar(color=TEAL,cornerRadiusEnd=4).encode(x=alt.X('영업이익:Q',title=peers['unit']),y=alt.Y('기업:N',sort='-x',title=None),tooltip=['기업',alt.Tooltip('영업이익:Q',format=',.1f')]).properties(height=max(150,min(400,len(df)*45))))
+    st.bar_chart(df.set_index('기업')[['영업이익']], use_container_width=True, height=max(150,min(400,len(df)*45)))
