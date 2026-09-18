@@ -321,13 +321,46 @@ def global_search():
 
 
 def render_home():
-    hero(
-        "시장을 읽고, 더 나은 판단을 만듭니다.",
-        "공시·재무·시세를 한 흐름으로 연결하고, 새 기관 API가 추가될수록 시장·수급·산업 분석이 확장됩니다.",
-    )
+    from ui_v2 import section_title, panel_title, topbar
+
+    topbar("반혜림")
+    section_title("내 투자 대시보드", "공식 데이터 기반 · 조회 시점 기준")
+
+    # The dashboard uses only data already available to the app. Missing market APIs
+    # remain explicit rather than being replaced with fabricated numbers.
+    if report and not is_demo:
+        result = brief(report)
+        fair = result.get("fair")
+        years = report.get("years", [])
+        latest_year = years[-1] if years else {}
+        price = report.get("price")
+        price_text = f"{price:,.0f}원" if isinstance(price, (int, float)) else "조회 대기"
+        fair_text = f"{fair['base']:,.0f}원" if fair else "자료 부족"
+        growth = result.get("growth", "자료 부족")
+        value = result.get("value", "평가 보류")
+        cards = [
+            ("현재 선택 종목", stock.get("name", "종목"), stock_label(stock), ""),
+            ("최근 시세", price_text, f"기준일 {report.get('price_date', '확인 대기')}", ""),
+            ("성장", growth, "확정 결산 기반", "positive"),
+            ("적정가 참고", fair_text, "목표주가가 아닌 참고값", ""),
+        ]
+    else:
+        cards = [
+            ("현재 선택 종목", "종목을 검색하세요", "상단 검색에서 시작", ""),
+            ("시장 지수", "데이터 연결 필요", "market.index", ""),
+            ("성장", "분석 대기", "확정 결산 기반", ""),
+            ("적정가 참고", "자료 부족", "임의 숫자를 사용하지 않음", ""),
+        ]
+
+    cols = st.columns(4)
+    for col, (title, value, note, tone) in zip(cols, cards):
+        with col:
+            card(title, value, note, tone=tone)
+
+    st.markdown("")
     global_search()
 
-    st.subheader("시장 스냅샷")
+    section_title("시장 스냅샷", "실데이터가 연결된 항목만 표시")
     cols = st.columns(4)
     market_cards = [
         ("KOSPI", "데이터 연결 필요", "market.index"),
@@ -335,49 +368,82 @@ def render_home():
         ("외국인 수급", "데이터 연결 필요", "market.investor_flow"),
         ("원/달러", "데이터 연결 필요", "macro.fx"),
     ]
-    for col, (title, value, cap) in zip(cols, market_cards):
+    for col, (title, value, note) in zip(cols, market_cards):
         with col:
-            card(title, value, f"필요 Capability · {cap}")
+            card(title, value, note)
 
-    left, right = st.columns([2, 1])
+    left, right = st.columns([2.05, 1])
     with left:
         with st.container(border=True):
-            st.subheader("주요 지수 추이")
+            panel_title("주요 지수 추이")
             empty_state(
                 "시장 시계열 API 연결 대기",
-                "지수 API가 연결되면 KOSPI·KOSDAQ과 주요 시장 흐름을 이 영역에 표시합니다. 가상 지수는 넣지 않습니다.",
+                "KOSPI·KOSDAQ 시계열 API가 연결되면 이 영역에 차트를 표시합니다. 가상 지수는 넣지 않습니다.",
             )
     with right:
         with st.container(border=True):
-            st.subheader("오늘의 주요 변화")
+            panel_title("오늘의 주요 변화")
             if report and not is_demo:
                 notices = sorted(report.get("disclosures", []), key=lambda x: x.get("date", ""), reverse=True)
                 if notices:
-                    for item in notices[:4]:
-                        st.link_button(item["date"] + " · " + item["title"], item["url"], use_container_width=True)
+                    for item in notices[:5]:
+                        st.link_button(
+                            item["date"] + " · " + item["title"],
+                            item["url"],
+                            use_container_width=True,
+                        )
                 else:
                     st.caption("선택 종목의 최근 공시가 수집되지 않았습니다.")
             else:
-                empty_state("종목을 검색해 시작", "검색 후 선택 종목의 최신 공시와 핵심 변화를 여기에 모읍니다.")
+                empty_state("종목을 검색해 시작", "선택 종목의 최신 공시와 핵심 변화를 이곳에 모읍니다.")
 
-    st.subheader("내 분석 포커스")
-    if report:
-        result = brief(report)
-        fair = result.get("fair")
-        cols = st.columns(4)
-        with cols[0]:
-            card("현재 선택", stock["name"], stock_label(stock))
-        with cols[1]:
-            card("성장", result["growth"], "확정 결산 기반")
-        with cols[2]:
-            card("가치 상태", result["value"], "역사적 배수 참고")
-        with cols[3]:
-            value = f"{fair['base']:,.0f}원" if fair else "자료 부족"
-            card("적정가 참고", value, "목표주가가 아닌 참고값")
-    else:
-        empty_state("아직 분석된 종목이 없습니다", "상단 검색에서 종목을 선택하면 기업·재무·공시 분석이 저장됩니다.")
+    section_title("내 분석 포커스", "기업 · 재무 · 가치")
+    left, mid, right = st.columns([1.35, 1, 1])
+    with left:
+        with st.container(border=True):
+            panel_title("선택 종목")
+            if report:
+                st.markdown(f"### {stock['name']}")
+                st.caption(stock_label(stock))
+                if report.get("business_excerpt"):
+                    sentences = extract_business_sentences(report)
+                    if sentences:
+                        st.write(sentences[0])
+                    else:
+                        st.caption("사업 설명을 불러왔습니다.")
+            else:
+                empty_state("아직 분석된 종목이 없습니다", "종목을 검색하면 기업 정보가 이곳에 표시됩니다.")
+    with mid:
+        with st.container(border=True):
+            panel_title("핵심 지표")
+            if report:
+                result = brief(report)
+                metric_rows = [
+                    ("성장", result.get("growth", "자료 부족")),
+                    ("가치", result.get("value", "평가 보류")),
+                    ("최근 결산", str(report.get("years", [{}])[-1].get("year", "자료 부족"))),
+                ]
+                for label, val in metric_rows:
+                    st.markdown(f"**{label}**")
+                    st.write(val)
+                    st.divider()
+            else:
+                empty_state("분석 대기", "공식 결산 자료가 연결되면 표시됩니다.")
+    with right:
+        with st.container(border=True):
+            panel_title("최근 공시")
+            if report:
+                notices = sorted(report.get("disclosures", []), key=lambda x: x.get("date", ""), reverse=True)
+                if notices:
+                    for item in notices[:4]:
+                        st.caption(item["date"])
+                        st.write(item["title"])
+                else:
+                    st.caption("최근 공시가 없습니다.")
+            else:
+                empty_state("자료 없음", "종목을 선택하면 최근 공시를 확인할 수 있습니다.")
 
-    st.subheader("확장 준비")
+    section_title("확장 준비", "데이터 연결 현황")
     c1, c2, c3 = st.columns(3)
     with c1:
         card("상승률 TOP", "API 연결 대기", "market ranking")
@@ -389,7 +455,6 @@ def render_home():
             card("AI 인사이트", "분석 준비됨", "수집 데이터 해설")
         else:
             card("AI 인사이트", "선택 기능", "OPENAI API 연결 시 활성화")
-
 
 def render_market():
     hero("시장 현황", "지수·거래대금·시장 폭·투자자 수급을 한 화면으로 연결하는 영역입니다.", "MARKET")
